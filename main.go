@@ -44,7 +44,6 @@ var lastBlockHeight = big.NewInt(0)
 var client = new(ethclient.Client)
 
 func main() {
-
 	//connect to ethereum node
 	//_client, err := ethclient.Dial("wss://mainnet.infura.io/ws/v3/00bfe69952bb416c8772333ee22f9372")
 	_client, err := ethclient.Dial("wss://ropsten.infura.io/ws/v3/1975e4f0e78940deb6d6b8880bd0bf4f")
@@ -56,8 +55,6 @@ func main() {
 
 	//start API server
 	go handleRequests()
-
-	//go startScanning(client)
 
 	headers := make(chan *types.Header)
 
@@ -77,6 +74,8 @@ func main() {
 		}
 	}
 }
+
+//withdraw all ERC20 Deposits to "0x0000000000000000000000000000000000000001"
 func withdrawERC20Deposits() {
 	for _, userData := range UsersData {
 		privateKey, err := crypto.HexToECDSA(userData.KeyStore.PrivateKey)
@@ -142,6 +141,7 @@ func withdrawERC20Deposits() {
 
 }
 
+//withdraw all ETH Deposits to "0x0000000000000000000000000000000000000000"
 func withdrawETHDeposits() {
 	for _, userData := range UsersData {
 		privateKey, err := crypto.HexToECDSA(userData.KeyStore.PrivateKey)
@@ -190,6 +190,7 @@ func withdrawETHDeposits() {
 	}
 }
 
+//start scanning new block
 func scanInit(header *types.Header) {
 	if lastBlockHeight.Cmp(big.NewInt(0)) == 0 {
 		lastBlockHeight.Set(header.Number)
@@ -210,6 +211,7 @@ func scanInit(header *types.Header) {
 	}
 }
 
+//scan new block for ERC20 Transfers
 func scanERC20Transfers(height *big.Int) {
 
 	block, err := client.BlockByNumber(context.Background(), height)
@@ -258,6 +260,7 @@ func scanERC20Receipt(hash common.Hash, blockHeight *big.Int, gasPrice *big.Int)
 	}
 }
 
+//scan new block for ETH Transfers
 func scanETHTransfers(height *big.Int) {
 	chainID, err := client.NetworkID(context.Background())
 	if err != nil {
@@ -299,7 +302,7 @@ func finalizeEthTxReceiver(txHash common.Hash, userID int, value big.Int, blockH
 		userData := UsersData[userID]
 		userData.EthBalance.Add(&value, &userData.EthBalance)
 		UsersData[userID] = userData
-		WebHook(txHash.String(), value, "ETH", "", blockHeight, userID)
+		webHook(txHash.String(), value, "ETH", "", blockHeight, userID)
 	}
 }
 
@@ -326,11 +329,10 @@ func finalizeERC20TxReceiver(txHash common.Hash, userID int, address common.Addr
 	tmp.Add(&value, &tmp)
 	userData.Erc20Balance[address.String()] = tmp
 	UsersData[userID] = userData
-	WebHook(txHash.String(), value, "ERC20", address.String(), blockHeight, userID)
+	webHook(txHash.String(), value, "ERC20", address.String(), blockHeight, userID)
 }
 
 func finalizeERC20TxSender(userID int, address common.Address, value big.Int, fee big.Int) {
-
 	userData := UsersData[userID]
 	tmp := userData.Erc20Balance[address.String()]
 	tmp.Sub(&value, &tmp)
@@ -339,8 +341,9 @@ func finalizeERC20TxSender(userID int, address common.Address, value big.Int, fe
 	UsersData[userID] = userData
 }
 
-func WebHook(blockchainTxId string, amount big.Int, txType string, tokenAddress string, blockNumber big.Int, userId int) {
-	fmt.Println("webhook: ", blockchainTxId, " ", amount.String(), " ", txType, " ", tokenAddress, " ", blockNumber.String(), " ", userId)
+//WebHook function
+func webHook(blockchainTxID string, amount big.Int, txType string, tokenAddress string, blockNumber big.Int, userID int) {
+	fmt.Println("webhook: ", blockchainTxID, " ", amount.String(), " ", txType, " ", tokenAddress, " ", blockNumber.String(), " ", userID)
 }
 
 func handleRequests() {
@@ -348,21 +351,24 @@ func handleRequests() {
 	myRouter.HandleFunc("/generateWalletAPI", generateWalletAPI)
 	myRouter.HandleFunc("/withdrawERC20Deposits", withdrawERC20DepositsAPI)
 	myRouter.HandleFunc("/withdrawETHDeposits", withdrawETHDepositsAPI)
-	myRouter.HandleFunc("/userInfo/{userID}", GetUserInfo)
+	myRouter.HandleFunc("/userInfo/{userID}", getUserInfo)
 
 	corsObj := handlers.AllowedOrigins([]string{"*"})
 	log.Fatal(http.ListenAndServe(":8000", handlers.CORS(corsObj)(myRouter)))
 }
 
+//API call for withdrawing ERC20 Deposits
 func withdrawERC20DepositsAPI(w http.ResponseWriter, r *http.Request) {
 	withdrawERC20Deposits()
 }
 
+//API call for withdrawing ETH Deposits
 func withdrawETHDepositsAPI(w http.ResponseWriter, r *http.Request) {
 	withdrawETHDeposits()
 }
 
-func GetUserInfo(w http.ResponseWriter, r *http.Request) {
+//API call for user Info
+func getUserInfo(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	_userID, ok := vars["userID"]
 
@@ -395,6 +401,7 @@ func GetUserInfo(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(message))
 }
 
+//API call for generating wallet
 func generateWalletAPI(w http.ResponseWriter, r *http.Request) {
 	_userID := r.FormValue("userID")
 
