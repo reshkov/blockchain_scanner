@@ -1,4 +1,4 @@
-# Blockchain Development task
+# Blockchain Scanner
 
 ## Usage
 #### run the binary file 
